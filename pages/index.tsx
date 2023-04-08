@@ -1,11 +1,98 @@
 import Head from 'next/head';
-import Image from 'next/image';
-import { Inter } from 'next/font/google';
-import styles from '@/styles/Home.module.css';
+import { useState } from 'react';
+import { GetServerSideProps } from 'next';
+import { prisma } from '@/lib/prisma';
+import { useRouter } from 'next/router.js';
 
-const inter = Inter({ subsets: ['latin'] });
+interface Notes {
+  notes: {
+    title: string;
+    content: string;
+    id: string;
+  }[];
+}
+interface FormData {
+  title: string;
+  content: string;
+  id: string;
+}
 
-export default function Home() {
+export default function Home({ notes }: Notes) {
+  const [form, setForm] = useState<FormData>({
+    title: '',
+    content: '',
+    id: '',
+  });
+  const router = useRouter();
+
+  const refreshData = () => {
+    router.replace(router.asPath);
+  };
+
+  //methode propre avec post
+  // async function create(data: FormData) {
+  //   try {
+  //     fetch('http://localhost:3000/api/createNote', {
+  //       body: JSON.stringify(data),
+  //       headers: {
+  //         'Content-type': 'application/json',
+  //       },
+  //       method: 'POST',
+  //     }).then(() => {
+  //       setForm({ title: '', content: '', id: '' });
+  //       refreshData();
+  //     });
+  //   } catch (error) {
+  //     console.log(error);
+  //   }
+  // }
+
+  //methode post + update pas top...
+  async function create(data: FormData) {
+    try {
+      fetch('http://localhost:3000/api/createNote', {
+        body: JSON.stringify(data),
+        headers: {
+          'Content-type': 'application/json',
+        },
+        method: 'POST',
+      }).then(() => {
+        if (data.id) {
+          deleteNote(data.id);
+          setForm({ title: '', content: '', id: '' });
+          refreshData();
+        }
+        setForm({ title: '', content: '', id: '' });
+        refreshData();
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+  async function deleteNote(id: string) {
+    try {
+      fetch(`http://localhost:3000/api/note/${id}`, {
+        headers: {
+          'Content-type': 'application/json',
+        },
+        method: 'DELETE',
+      }).then(() => {
+        refreshData();
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+  const handleSubmit = async (data: FormData) => {
+    try {
+      create(data);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   return (
     <>
       <Head>
@@ -14,7 +101,83 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <h1 className="text-3xl font-bold underline">Hello world!</h1>
+      <div className="py-4">
+        <p className="text-center font-bold text-2xl text-slate-400 mb-4">
+          Notes
+        </p>
+        <form
+          onSubmit={(e) => {
+            handleSubmit(form);
+            e.preventDefault();
+          }}
+          className="w-auto min-w-[25%] max-w-min mx-auto space-y-6 flex flex-col items-stretch"
+        >
+          <input
+            type="text"
+            placeholder="Title"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            className="border-2 border-purple-300 rounded p-1"
+          />
+          <textarea
+            placeholder="Title"
+            value={form.content}
+            onChange={(e) => setForm({ ...form, content: e.target.value })}
+            className="border-2 border-purple-300 rounded p-1"
+          />
+          <button type="submit" className="bg-blue-500 rounded p-1 text-white">
+            Add
+          </button>
+        </form>
+        <div className="w-auto min-w-[25%] max-w-min mx-auto space-y-6 flex flex-col items-stretch">
+          <ul className="text-white">
+            {notes.map((note) => (
+              <li key={note.id} className="border-b border-slate-300 p-2">
+                <div className="flex justify-between">
+                  <div className="flex-1">
+                    <p className="font-bold">{note.title}</p>
+                    <p className="text-sm">{note.content}</p>
+                  </div>
+                  <button
+                    className="bg-red-500 text-white px-3 font-bold rounded"
+                    onClick={() => deleteNote(note.id)}
+                  >
+                    X
+                  </button>
+                  <button
+                    className="bg-blue-500 text-white px-3 font-bold rounded"
+                    onClick={() =>
+                      setForm({
+                        title: note.title,
+                        content: note.content,
+                        id: note.id,
+                      })
+                    }
+                  >
+                    update
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </>
   );
 }
+
+export const getServerSideProps: GetServerSideProps = async () => {
+  const notes = await prisma.note.findMany({
+    select: {
+      title: true,
+      id: true,
+      content: true,
+    },
+  });
+
+  return {
+    props: {
+      notes,
+    },
+  };
+};
